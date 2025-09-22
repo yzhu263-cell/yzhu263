@@ -14,12 +14,8 @@
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
         }
-        /* Custom focus ring for better visibility */
-        .focus\:ring-blue-300:focus {
-            --tw-ring-color: rgba(147, 197, 253, 0.8);
-        }
         canvas {
-            background-color: #f8fafc; /* A very light gray background for the canvas */
+            background-color: #f8fafc;
         }
     </style>
 </head>
@@ -27,26 +23,22 @@
 
     <div class="container mx-auto p-4 md:p-8">
         
-        <!-- Header -->
         <header class="mb-8 border-b-2 border-blue-200 pb-4">
-            <h1 class="text-3xl md:text-4xl font-bold text-blue-800">人體消化系統模擬器</h1>
-            <p class="text-md text-gray-600 mt-2">胃你好。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-800">人體消化系統互動模擬</h1>
+            <p class="text-md text-gray-600 mt-2">一個視覺化的旅程，探索食物如何在我們的身體內被分解與吸收。</p>
         </header>
 
         <div class="flex flex-col md:flex-row gap-8 items-start">
 
-            <!-- Left Panel: Canvas Simulation -->
             <div class="w-full md:w-5/12 lg:w-4/12">
                 <div class="bg-white rounded-xl shadow-lg p-4 sticky top-8">
                     <canvas id="digestiveCanvas" class="w-full h-auto rounded-lg"></canvas>
                 </div>
             </div>
 
-            <!-- Right Panel: Controls and Information -->
             <div class="w-full md:w-7/12 lg:w-8/12">
                 <div class="bg-white rounded-xl shadow-lg p-6">
                     <div class="flex flex-col gap-6">
-                        <!-- Controls Section -->
                         <div class="w-full">
                             <h2 class="text-2xl font-bold text-blue-700 mb-4">消化旅程控制器</h2>
                             <div class="mb-6">
@@ -66,7 +58,6 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- Information Card Section -->
                         <div class="w-full">
                             <div id="infoCard" class="bg-gray-50 border border-gray-200 rounded-lg p-6 min-h-[250px] transition-all duration-500">
                                 <h3 id="organName" class="text-2xl font-bold text-gray-800 mb-3">準備開始</h3>
@@ -83,141 +74,137 @@
 
         </div>
         
-        <!-- Footer -->
         <footer class="text-center mt-12 py-4 border-t border-gray-300">
             <p class="text-sm text-gray-500">&copy; 2025 醫學衛教資訊平台。本內容僅供教育參考，不能取代專業醫療建議。</p>
         </footer>
     </div>
 
     <script>
+        // --- Setup and Configuration ---
         const canvas = document.getElementById('digestiveCanvas');
         const ctx = canvas.getContext('2d');
         const startButton = document.getElementById('startButton');
         const resetButton = document.getElementById('resetButton');
         const speedControl = document.getElementById('speedControl');
-        
-        // Info card elements
         const organNameEl = document.getElementById('organName');
         const organFunctionEl = document.getElementById('organFunction');
         const organFactEl = document.getElementById('organFact');
 
         let animationFrameId;
-        let foodParticle = { x: 0, y: 0, baseRadius: 8, radius: 8 };
+        let foodParticle = { x: 0, y: 0, baseRadius: 10, radius: 10, fragments: [] };
         let currentPathIndex = 0;
         let currentPointIndex = 0;
-        let animationSpeed = 2; // Default speed
-        let simulationState = 'stopped'; // 'stopped', 'running', 'paused'
+        let animationSpeed = 2;
+        let simulationState = 'stopped';
+        let specialEffects = {
+            stomachAcids: [],
+            absorbParticles: [],
+            bileParticle: null,
+            enzymeParticle: null
+        };
+        let peristalsisWave = 0;
 
-        // Digestive stages and information
+        // --- Digestive Stages Data ---
         const digestiveStages = [
             {
                 name: '口腔 (Oral Cavity)',
-                function: '透過牙齒咀嚼（物理消化）和唾液（化學消化）開始分解澱粉。',
+                function: '物理消化(咀嚼)與化學消化(唾液)同時作用，將食物初步分解。',
                 fact: '人類每天會分泌約1至1.5公升的唾液。',
-                path: [{x: 0.5, y: 0.08}]
+                path: [{x: 0.5, y: 0.08}],
+                event: 'chew'
             },
             {
                 name: '食道 (Esophagus)',
-                function: '透過肌肉的蠕動，將食物從咽部推向胃部，這趟旅程大約需要7秒鐘。',
+                function: '透過波浪狀的肌肉收縮(蠕動)，將食物推向胃部，過程約7秒。',
                 fact: '即使倒立，食道的蠕動作用也能將食物送進胃裡。',
-                path: [{x: 0.5, y: 0.15}, {x: 0.5, y: 0.25}]
+                path: [{x: 0.5, y: 0.15}, {x: 0.5, y: 0.25}],
+                event: 'peristalsis'
             },
             {
                 name: '胃 (Stomach)',
-                function: '食物在此與強酸性的「胃液」混合。胃液中的「胃蛋白酶」會開始分解蛋白質。胃的強力蠕動將食物變成粥狀的食糜。',
-                fact: '胃酸的pH值可低至1.5，足以溶解金屬。胃壁黏膜能保護胃本身不被腐蝕。',
-                path: [{x: 0.45, y: 0.3}, {x: 0.38, y: 0.35}, {x: 0.35, y: 0.42}, {x: 0.4, y: 0.48}]
+                function: '強力的肌肉攪拌食物，並分泌胃酸與蛋白酶，將食物變成粥狀的食糜。',
+                fact: '胃酸的pH值可低至1.5，足以溶解金屬。',
+                path: [{x: 0.45, y: 0.3}, {x: 0.38, y: 0.35}, {x: 0.35, y: 0.42}, {x: 0.4, y: 0.48}],
+                event: 'acid'
             },
             {
-                name: '小腸 (十二指腸) - 消化液大集合',
-                function: '食糜進入小腸的第一段。「肝臟」製造、儲存在「膽囊」的「膽汁」在此乳化脂肪。同時，「胰臟」分泌的「胰液」也注入此處，提供多種消化酶。',
-                fact: '膽汁就像洗碗精，它本身沒有消化酶，但能將大油滴變成小油滴，大幅增加脂肪被分解的效率。',
-                path: [{x: 0.5, y: 0.48}, {x: 0.55, y: 0.52}]
+                name: '小腸 (十二指腸)',
+                function: '食糜在此與「膽汁」和「胰液」混合。膽汁乳化脂肪，胰液則提供多種消化酶。',
+                fact: '膽汁就像洗碗精，能將大油滴變成小油滴，大幅增加脂肪被分解的效率。',
+                path: [{x: 0.5, y: 0.48}, {x: 0.55, y: 0.52}],
+                event: 'mix'
             },
             {
-                name: '小腸 (空腸/迴腸) - 營養吸收總部',
-                function: '在「胰液」和「腸液」的共同作用下，所有營養素被分解成最小分子（葡萄糖、胺基酸等），由小腸壁上密布的絨毛吸收，送入血液。',
+                name: '小腸 (營養吸收)',
+                function: '營養素被分解成最小分子，由小腸壁上密布的絨毛吸收，送入血液。',
                 fact: '小腸內壁充滿了絨毛，將其表面積擴大到相當於一個網球場的大小！',
-                path: [{x: 0.45, y: 0.55}, {x: 0.55, y: 0.58}, {x: 0.45, y: 0.61}, {x: 0.55, y: 0.64}, {x: 0.45, y: 0.67}, {x: 0.55, y: 0.70}]
+                path: [{x: 0.45, y: 0.55}, {x: 0.55, y: 0.58}, {x: 0.45, y: 0.61}, {x: 0.55, y: 0.64}],
+                event: 'absorb'
             },
             {
                 name: '大腸 (Large Intestine)',
-                function: '未被吸收的食物殘渣進入大腸。這裡的主要工作是吸收剩餘的水分和電解質，使殘渣逐漸變硬。',
-                fact: '大腸內含有數以兆計的腸道菌，它們對我們的健康至關重要，能幫助合成維生素K。',
-                path: [{x: 0.65, y: 0.7}, {x: 0.65, y: 0.55}, {x: 0.35, y: 0.55}, {x: 0.35, y: 0.8}]
+                function: '吸收剩餘的水分和電解質，使食物殘渣逐漸變硬形成糞便。',
+                fact: '大腸內含有數以兆計的腸道菌，它們對我們的健康至關重要。',
+                path: [{x: 0.65, y: 0.7}, {x: 0.65, y: 0.55}, {x: 0.35, y: 0.55}, {x: 0.35, y: 0.8}],
+                event: 'dehydrate'
             },
             {
-                name: '直腸 (Rectum)',
-                function: '成形的糞便會暫時儲存在大腸末端的直腸，當累積到一定量時，便會引發便意，準備排出。',
-                fact: '直腸壁上的神經感受器非常敏感，能分辨出內容物是固體、液體還是氣體。',
-                path: [{x: 0.45, y: 0.85}]
-            },
-            {
-                name: '旅程結束',
-                function: '食物殘渣（糞便）最終由肛門排出體外，完成整個消化旅程。',
-                fact: '整個消化過程從進食到排泄，通常需要24到72小時，因人而異。',
-                path: [{x: 0.5, y: 0.9}]
+                name: '直腸與排出',
+                function: '成形的糞便暫存於此，累積到一定量後，便會引發便意排出體外。',
+                fact: '整個消化過程從進食到排泄，通常需要24到72小時。',
+                path: [{x: 0.5, y: 0.9}],
+                event: 'end'
             }
         ];
-        
-        // --- Refactored Drawing Functions ---
 
-        /**
-         * Applies a highlight effect to the active organ.
-         * @param {CanvasRenderingContext2D} ctx - The canvas context.
-         * @param {boolean} isActive - Whether the organ is currently active.
-         */
-        function applyHighlight(ctx, isActive) {
-            if (isActive) {
-                ctx.shadowColor = 'rgba(59, 130, 246, 0.7)'; // A bright blue glow
-                ctx.shadowBlur = 20;
-            } else {
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
-            }
-        }
+        // --- Drawing Functions ---
         
-        /**
-         * Draws all components of the digestive system.
-         * @param {number} activeIndex - The index of the currently active digestive stage.
-         */
-        function drawScene(activeIndex = -1) {
+        function drawScene() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const w = canvas.width;
             const h = canvas.height;
 
-            // Mapping from stage index to the organ to highlight
-            const highlightMap = {
-                1: 'esophagus', 2: 'stomach', 3: 'small-intestine',
-                4: 'small-intestine', 5: 'large-intestine', 6: 'large-intestine'
-            };
-            const activeOrgan = highlightMap[activeIndex] || '';
+            const activeOrgan = digestiveStages[currentPathIndex]?.event || '';
+            peristalsisWave += 0.05;
 
-            // --- Draw organs in layer order (background to foreground) ---
             drawPancreas(ctx, w, h);
-            drawLargeIntestine(ctx, w, h, activeOrgan === 'large-intestine');
-            drawSmallIntestine(ctx, w, h, activeOrgan === 'small-intestine');
-            drawStomachAndEsophagus(ctx, w, h, activeOrgan === 'stomach', activeOrgan === 'esophagus');
+            drawLargeIntestine(ctx, w, h, activeOrgan === 'dehydrate');
+            drawSmallIntestine(ctx, w, h, ['mix', 'absorb'].includes(activeOrgan));
+            drawStomachAndEsophagus(ctx, w, h, activeOrgan === 'acid', activeOrgan === 'peristalsis');
             drawLiverAndGallbladder(ctx, w, h);
-
-            // --- Draw labels on top ---
+            
             drawLabels(ctx, w, h);
-
-            // --- Draw food particle if simulation is running ---
+            
             if (simulationState !== 'stopped') {
+                drawSpecialEffects();
                 drawFoodParticle();
             }
 
-            // --- Draw pause overlay if paused ---
-            if (simulationState === 'paused') {
-                drawPauseOverlay();
-            }
+            if (simulationState === 'paused') drawPauseOverlay();
         }
 
+        function applyHighlight(ctx, isActive, isPeristalsis = false, h) {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            if (isActive) {
+                ctx.shadowColor = 'rgba(59, 130, 246, 0.7)';
+                ctx.shadowBlur = 20;
+            }
+            if(isPeristalsis && h) { // Add check for h to prevent error
+                 // Create a moving gradient to simulate peristalsis
+                const gradient = ctx.createLinearGradient(0, h * 0.1, 0, h * 0.25);
+                const wavePos = Math.abs(Math.sin(peristalsisWave));
+                gradient.addColorStop(Math.max(0, wavePos - 0.2), '#F4A792');
+                gradient.addColorStop(wavePos, 'rgba(129, 178, 248, 1)');
+                gradient.addColorStop(Math.min(1, wavePos + 0.2), '#F4A792');
+                ctx.strokeStyle = gradient;
+            } else {
+                ctx.strokeStyle = '#F4A792'; // Reset to default color
+            }
+        }
+        
         function drawStomachAndEsophagus(ctx, w, h, isStomachActive, isEsophagusActive) {
-            // Esophagus
-            applyHighlight(ctx, isEsophagusActive);
-            ctx.strokeStyle = '#F4A792';
+            applyHighlight(ctx, isEsophagusActive, isEsophagusActive, h);
             ctx.lineWidth = w * 0.05;
             ctx.beginPath();
             ctx.moveTo(w * 0.5, h * 0.25);
@@ -231,8 +218,7 @@
             ctx.closePath();
             ctx.fill();
 
-            // Stomach
-            applyHighlight(ctx, isStomachActive);
+            applyHighlight(ctx, isStomachActive, false, h);
             ctx.fillStyle = '#F4A792';
             ctx.beginPath();
             ctx.moveTo(w * 0.5, h * 0.25);
@@ -240,38 +226,34 @@
             ctx.bezierCurveTo(w * 0.6, h * 0.48, w * 0.7, h * 0.4, w * 0.6, h * 0.3);
             ctx.closePath();
             ctx.fill();
-            applyHighlight(ctx, false); // Reset highlight
+            applyHighlight(ctx, false, false, h);
         }
-        
+
         function drawPancreas(ctx, w, h) {
              ctx.fillStyle = '#FDE496';
              ctx.beginPath();
-             // A larger, more visible pancreas shape behind the stomach
-             ctx.moveTo(w * 0.6, h * 0.45); // Start on the right side
-             ctx.quadraticCurveTo(w * 0.4, h * 0.5, w * 0.3, h * 0.44); // curve to the left
-             ctx.quadraticCurveTo(w * 0.35, h * 0.4, w * 0.6, h * 0.41); // curve back
+             ctx.moveTo(w * 0.6, h * 0.45);
+             ctx.quadraticCurveTo(w * 0.4, h * 0.5, w * 0.3, h * 0.44);
+             ctx.quadraticCurveTo(w * 0.35, h * 0.4, w * 0.6, h * 0.41);
              ctx.closePath();
              ctx.fill();
          }
 
         function drawLargeIntestine(ctx, w, h, isActive) {
-            applyHighlight(ctx, isActive);
+            applyHighlight(ctx, isActive, false, h);
             ctx.strokeStyle = '#D9825F';
             ctx.lineWidth = w * 0.08;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.beginPath();
-            ctx.moveTo(w * 0.75, h * 0.7);
-            ctx.lineTo(w * 0.75, h * 0.5);
-            ctx.lineTo(w * 0.25, h * 0.5);
-            ctx.lineTo(w * 0.25, h * 0.75);
+            ctx.moveTo(w * 0.75, h * 0.7); ctx.lineTo(w * 0.75, h * 0.5); ctx.lineTo(w * 0.25, h * 0.5); ctx.lineTo(w * 0.25, h * 0.75);
             ctx.bezierCurveTo(w * 0.3, h * 0.85, w * 0.7, h * 0.85, w * 0.5, h * 0.88);
             ctx.stroke();
-            applyHighlight(ctx, false); // Reset highlight
+            applyHighlight(ctx, false, false, h);
         }
 
         function drawSmallIntestine(ctx, w, h, isActive) {
-            applyHighlight(ctx, isActive);
+            applyHighlight(ctx, isActive, false, h);
             ctx.strokeStyle = '#F4A792';
             ctx.lineWidth = w * 0.06;
             ctx.beginPath();
@@ -279,35 +261,27 @@
             let x = 0.5, y = 0.5, dx = 0.1;
             for(let i=0; i<8; i++) {
                 ctx.bezierCurveTo(w * (x - dx), h * y, w * (x + dx), h * (y + 0.05), w * x, h * (y + 0.05));
-                y += 0.05;
-                dx *= -1;
+                y += 0.05; dx *= -1;
             }
             ctx.lineTo(w * 0.7, h * 0.7);
             ctx.stroke();
-            applyHighlight(ctx, false); // Reset highlight
+            applyHighlight(ctx, false, false, h);
         }
 
         function drawLiverAndGallbladder(ctx, w, h) {
-             // Liver - based on the reference image, positioned to the viewer's left
-            ctx.fillStyle = '#C75A4D'; // Dark red
+            ctx.fillStyle = '#C75A4D';
             ctx.beginPath();
-            // Start near the top-center, right of the esophagus
             ctx.moveTo(w * 0.6, h * 0.25);
-            // Big lobe on the left (anatomical right)
             ctx.bezierCurveTo(w * 0.6, h * 0.18, w * 0.2, h * 0.2, w * 0.15, h * 0.3);
-            // Bottom edge
             ctx.bezierCurveTo(w * 0.2, h * 0.4, w * 0.5, h * 0.42, w * 0.6, h * 0.35);
-            // Small lobe on the right (anatomical left)
             ctx.bezierCurveTo(w * 0.7, h * 0.38, w * 0.7, h * 0.28, w * 0.6, h * 0.25);
             ctx.closePath();
             ctx.fill();
 
-            // Gallbladder - tucked under the liver
-            ctx.fillStyle = '#6A9B7A'; // Green
+            ctx.fillStyle = '#6A9B7A';
             ctx.beginPath();
-            // Positioned to the upper right of the stomach
-             ctx.ellipse(w * 0.68, h * 0.37, w * 0.04, w * 0.06, Math.PI / 3, 0, Math.PI * 2);
-             ctx.fill();
+            ctx.ellipse(w * 0.68, h * 0.37, w * 0.04, w * 0.06, Math.PI / 3, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         function drawLabels(ctx, w, h) {
@@ -316,32 +290,32 @@
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 6;
             ctx.textAlign = 'center';
-            ctx.fillText('口腔', w * 0.5, h * 0.08);
-            ctx.fillText('食道', w * 0.5, h * 0.18);
-            ctx.fillText('肝臟', w * 0.35, h * 0.3);      // Moved left to match new liver position
-            ctx.fillText('胃', w * 0.5, h * 0.39);       // Centered the stomach label
-            ctx.fillText('膽囊', w * 0.68, h * 0.38);     // Moved to new gallbladder position
-            ctx.fillText('胰臟', w * 0.45, h * 0.47);     // Moved to be on top of the visible part of the pancreas
-            ctx.fillText('大腸', w * 0.8, h * 0.6);      // Moved to the side of the ascending colon
-            ctx.fillText('小腸', w * 0.5, h * 0.65);
+            ctx.fillText('口腔', w * 0.5, h * 0.08); ctx.fillText('食道', w * 0.5, h * 0.18);
+            ctx.fillText('肝臟', w * 0.35, h * 0.3); ctx.fillText('胃', w * 0.5, h * 0.39);
+            ctx.fillText('膽囊', w * 0.68, h * 0.38); ctx.fillText('胰臟', w * 0.45, h * 0.47);
+            ctx.fillText('大腸', w * 0.8, h * 0.6); ctx.fillText('小腸', w * 0.5, h * 0.65);
             ctx.fillText('直腸', w * 0.5, h * 0.88);
-            ctx.shadowColor = 'transparent'; // Reset shadow
-            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
         }
 
         function drawFoodParticle() {
-            // Pulsing and shrinking effect
-            const pulse = Math.sin(Date.now() * 0.008) * 1.5;
-            const progress = currentPathIndex / (digestiveStages.length - 1);
-            foodParticle.radius = foodParticle.baseRadius * (1 - progress * 0.6); // Shrinks to 40% of original size
-
-            ctx.beginPath();
-            ctx.arc(foodParticle.x, foodParticle.y, foodParticle.radius + pulse, 0, Math.PI * 2);
-            ctx.fillStyle = '#ff6347'; // Tomato color
-            ctx.fill();
-            ctx.strokeStyle = '#c0392b';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            if (foodParticle.fragments.length > 0) {
+                foodParticle.fragments.forEach(f => {
+                    ctx.beginPath();
+                    ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ff8c69';
+                    ctx.fill();
+                });
+            } else {
+                const pulse = Math.sin(Date.now() * 0.008) * 1.5;
+                ctx.beginPath();
+                ctx.arc(foodParticle.x, foodParticle.y, foodParticle.radius + pulse, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff6347';
+                ctx.fill();
+                ctx.strokeStyle = '#c0392b';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
         }
 
         function drawPauseOverlay() {
@@ -354,123 +328,244 @@
             ctx.fillText('❚❚', canvas.width / 2, canvas.height / 2);
         }
 
-        // --- Animation & Logic Functions ---
+        // --- Special Effects & Animation Logic ---
+        function handleSpecialEvents(stageIndex) {
+            const event = digestiveStages[stageIndex].event;
+            const w = canvas.width;
+            const h = canvas.height;
 
+            if (event === 'chew') {
+                foodParticle.radius = foodParticle.baseRadius * 0.9;
+            }
+            if (event === 'acid' && specialEffects.stomachAcids.length === 0) {
+                foodParticle.radius = foodParticle.baseRadius * 0.7;
+                for (let i = 0; i < 20; i++) {
+                    specialEffects.stomachAcids.push({
+                        x: w * (0.35 + Math.random() * 0.2),
+                        y: h * (0.3 + Math.random() * 0.15),
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: (Math.random() - 0.5) * 2,
+                        radius: Math.random() * 2 + 1
+                    });
+                }
+            }
+            if (event === 'mix') {
+                if (!specialEffects.bileParticle) {
+                    specialEffects.bileParticle = { x: w * 0.68, y: h * 0.38, target: foodParticle, active: true, color: '#6A9B7A' };
+                }
+                if (!specialEffects.enzymeParticle) {
+                    specialEffects.enzymeParticle = { x: w * 0.45, y: h * 0.47, target: foodParticle, active: true, color: '#FDE496' };
+                }
+            }
+            if(event === 'absorb' && Math.random() < 0.3) { // Create absorption particles randomly
+                 specialEffects.absorbParticles.push({
+                    x: foodParticle.fragments.length > 0 ? foodParticle.fragments[0].x : foodParticle.x,
+                    y: foodParticle.fragments.length > 0 ? foodParticle.fragments[0].y : foodParticle.y,
+                    targetX: (Math.random() > 0.5 ? 0.3 : 0.7) * w, // Go to either side of the intestine
+                    targetY: (0.55 + Math.random() * 0.15) * h,
+                    life: 1,
+                    radius: Math.random() * 2 + 2
+                });
+            }
+             if (event === 'dehydrate') {
+                foodParticle.fragments.forEach(f => f.radius *= 0.995); // Slowly shrink fragments
+            }
+        }
+
+        function drawSpecialEffects() {
+            // Stomach acids
+            specialEffects.stomachAcids.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < canvas.width * 0.3 || p.x > canvas.width * 0.65) p.vx *= -1;
+                if(p.y < canvas.height * 0.3 || p.y > canvas.height * 0.45) p.vy *= -1;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.7)';
+                ctx.fill();
+            });
+
+            // Bile and Enzyme particles
+            [specialEffects.bileParticle, specialEffects.enzymeParticle].forEach(p => {
+                if(p && p.active) {
+                    const targetX = foodParticle.x;
+                    const targetY = foodParticle.y;
+                    const dx = targetX - p.x;
+                    const dy = targetY - p.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 10) {
+                        p.active = false;
+                        if(foodParticle.fragments.length === 0) { // First time hit, break food apart
+                             for(let i=0; i<5; i++) {
+                                foodParticle.fragments.push({
+                                    x: foodParticle.x + (Math.random() - 0.5) * 10,
+                                    y: foodParticle.y + (Math.random() - 0.5) * 10,
+                                    vx: (Math.random() - 0.5) * 1,
+                                    vy: (Math.random() - 0.5) * 1,
+                                    radius: foodParticle.baseRadius * 0.4
+                                });
+                             }
+                        }
+                    } else {
+                        p.x += (dx / dist) * 5;
+                        p.y += (dy / dist) * 5;
+                    }
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                }
+            });
+            
+             // Nutrient absorption particles
+            let activeAbsorbParticles = [];
+            specialEffects.absorbParticles.forEach(p => {
+                p.life -= 0.02;
+                if (p.life > 0) {
+                    activeAbsorbParticles.push(p);
+                    const dx = p.targetX - p.x;
+                    const dy = p.targetY - p.y;
+                    p.x += dx * 0.1;
+                    p.y += dy * 0.1;
+
+                    ctx.beginPath();
+                    // FIX: Ensure radius is never negative
+                    ctx.arc(p.x, p.y, Math.max(0, p.radius * p.life), 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 215, 0, ${p.life})`;
+                    ctx.fill();
+                }
+            });
+            specialEffects.absorbParticles = activeAbsorbParticles;
+        }
+        
+        function animate() {
+            if (simulationState !== 'running') return;
+
+            const stage = digestiveStages[currentPathIndex];
+            if (!stage) return; // defensive code to prevent error if index is out of bounds
+
+            const targetPoint = stage.path[currentPointIndex];
+            const targetX = targetPoint.x * canvas.width;
+            const targetY = targetPoint.y * canvas.height;
+            const speed = animationSpeed * (canvas.width / 400);
+
+            const particleSet = foodParticle.fragments.length > 0 ? foodParticle.fragments : [foodParticle];
+            const leadParticle = particleSet[0];
+            
+            if (!leadParticle) return; // defensive code
+
+            const dx = targetX - leadParticle.x;
+            const dy = targetY - leadParticle.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < speed) {
+                particleSet.forEach(p => {
+                    p.x = targetX;
+                    p.y = targetY;
+                });
+
+                currentPointIndex++;
+                if (currentPointIndex >= stage.path.length) {
+                    currentPointIndex = 0;
+                    currentPathIndex++;
+                    if (currentPathIndex >= digestiveStages.length) {
+                        simulationState = 'stopped';
+                        startButton.textContent = "再消化一次";
+                        cancelAnimationFrame(animationFrameId);
+                        drawScene();
+                        return; 
+                    }
+                    updateInfoCard(currentPathIndex);
+                }
+            } else {
+                 const moveX = (dx / distance) * speed;
+                 const moveY = (dy / distance) * speed;
+                 particleSet.forEach((p, i) => {
+                    p.x += moveX; p.y += moveY;
+                    if(p.vx) {
+                        p.x += p.vx; p.y += p.vy;
+                        p.vx *= 0.95; p.vy *= 0.95;
+                    }
+                 });
+            }
+            
+            handleSpecialEvents(currentPathIndex);
+            drawScene();
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        // --- Control Functions & Event Listeners ---
         function updateInfoCard(stageIndex) {
             const stage = digestiveStages[stageIndex];
+            if (!stage) return;
             organNameEl.textContent = stage.name;
             organFunctionEl.textContent = stage.function;
             organFactEl.textContent = stage.fact;
         }
 
-        function animate() {
-            if (simulationState !== 'running') return;
-
-            const stage = digestiveStages[currentPathIndex];
-            const path = stage.path;
-            const targetPoint = path[currentPointIndex];
-
-            const targetX = targetPoint.x * canvas.width;
-            const targetY = targetPoint.y * canvas.height;
-
-            const dx = targetX - foodParticle.x;
-            const dy = targetY - foodParticle.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            const speed = animationSpeed * (canvas.width / 400); // Scale speed with canvas size
-
-            if (distance < speed) {
-                currentPointIndex++;
-                if (currentPointIndex >= path.length) {
-                    currentPointIndex = 0;
-                    currentPathIndex++;
-                    if (currentPathIndex >= digestiveStages.length) {
-                        // End of simulation
-                        updateInfoCard(digestiveStages.length - 1);
-                        simulationState = 'stopped';
-                        startButton.textContent = "再消化一次";
-                        currentPathIndex = digestiveStages.length - 1;
-                        drawScene(currentPathIndex);
-                        return;
-                    }
-                    updateInfoCard(currentPathIndex);
-                }
-            } else {
-                foodParticle.x += (dx / distance) * speed;
-                foodParticle.y += (dy / distance) * speed;
-            }
-
-            drawScene(currentPathIndex);
-            animationFrameId = requestAnimationFrame(animate);
-        }
-
         function handleStartPauseClick() {
-            if (simulationState === 'stopped') {
-                if (currentPathIndex >= digestiveStages.length - 1) {
-                    resetSimulation(); 
-                }
-                simulationState = 'running';
-                startButton.textContent = '暫停';
-
-                if (currentPathIndex === 0 && currentPointIndex === 0) {
-                    const startPoint = digestiveStages[0].path[0];
-                    foodParticle.x = startPoint.x * canvas.width;
-                    foodParticle.y = startPoint.y * canvas.height;
-                    updateInfoCard(0);
-                }
-                requestAnimationFrame(animate);
-
-            } else if (simulationState === 'running') {
+            if (simulationState === 'running') {
+                // PAUSE
                 simulationState = 'paused';
                 startButton.textContent = '繼續';
                 cancelAnimationFrame(animationFrameId);
-                drawScene(currentPathIndex); // Redraw to show pause overlay
-
+                drawScene(); 
             } else if (simulationState === 'paused') {
+                // RESUME
                 simulationState = 'running';
                 startButton.textContent = '暫停';
-                requestAnimationFrame(animate);
+                animationFrameId = requestAnimationFrame(animate);
+            } else { 
+                // START from 'stopped' state
+                resetSimulation(true); // Soft reset to keep the UI
+                simulationState = 'running';
+                startButton.textContent = '暫停';
+                
+                const startPoint = digestiveStages[0].path[0];
+                foodParticle.x = startPoint.x * canvas.width;
+                foodParticle.y = startPoint.y * canvas.height;
+                updateInfoCard(0);
+                
+                animationFrameId = requestAnimationFrame(animate);
             }
         }
 
-        function resetSimulation() {
+        function resetSimulation(isStartingNew = false) {
             cancelAnimationFrame(animationFrameId);
             simulationState = 'stopped';
-            currentPathIndex = 0;
+            currentPathIndex = 0; 
             currentPointIndex = 0;
-            foodParticle.x = -100;
-            foodParticle.y = -100;
-            foodParticle.radius = foodParticle.baseRadius;
+            foodParticle = { x: -100, y: -100, baseRadius: 10, radius: 10, fragments: [] };
+            specialEffects = { stomachAcids: [], absorbParticles: [], bileParticle: null, enzymeParticle: null };
             
-            organNameEl.textContent = '準備開始';
-            organFunctionEl.textContent = '點擊「開始消化」按鈕，模擬食物進入人體的旅程。';
-            organFactEl.textContent = '整個消化道從口腔到肛門，總長度約為9公尺！';
+            if (!isStartingNew) {
+                organNameEl.textContent = '準備開始';
+                organFunctionEl.textContent = '點擊「開始消化」按鈕，模擬食物進入人體的旅程。';
+                organFactEl.textContent = '整個消化道從口腔到肛門，總長度約為9公尺！';
+                startButton.textContent = "開始消化";
+            }
             
-            startButton.textContent = "開始消化";
-            
-            drawScene(-1); // Draw initial state with no highlight
+            drawScene();
         }
         
-        // --- Initial Setup & Event Listeners ---
-
         function setCanvasDimensions() {
-            const container = canvas.parentElement;
-            const size = container.clientWidth;
-            canvas.width = size;
-            canvas.height = size * 1.25; // Aspect ratio for the drawing
-            drawScene(simulationState === 'stopped' ? -1 : currentPathIndex);
+            const size = canvas.parentElement.clientWidth;
+            canvas.width = size; canvas.height = size * 1.25;
+            if (size > 0) { // Ensure canvas has a size before drawing
+                drawScene();
+            }
         }
 
         startButton.addEventListener('click', handleStartPauseClick);
-        resetButton.addEventListener('click', resetSimulation);
-        speedControl.addEventListener('input', (e) => {
-            animationSpeed = parseInt(e.target.value);
-        });
+        resetButton.addEventListener('click', () => resetSimulation(false));
+        speedControl.addEventListener('input', (e) => { animationSpeed = parseInt(e.target.value); });
         window.addEventListener('resize', setCanvasDimensions);
 
         // Initial setup
-        setCanvasDimensions();
-        resetSimulation();
+        // Use setTimeout to ensure the layout is stable before getting size
+        setTimeout(() => {
+            setCanvasDimensions();
+            resetSimulation(false);
+        }, 0);
     </script>
 
 </body>
